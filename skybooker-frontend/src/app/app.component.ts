@@ -1,11 +1,12 @@
-import { CommonModule, CurrencyPipe, DatePipe, TitleCasePipe } from '@angular/common';
+import { CommonModule, CurrencyPipe, TitleCasePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ApiService } from './api.service';
 import { environment } from '../environments/environment';
-import { Airline, AirportOption, Booking, FareSummary, Flight, NotificationItem, Passenger, Seat, User } from './models';
+import { Airline, Airport, AirportOption, Booking, FareSummary, Flight, NotificationItem, Passenger, Seat, User } from './models';
 
-type Step = 'search' | 'auth' | 'profile' | 'results' | 'passengers' | 'seats' | 'review' | 'payment' | 'trips';
+type Step = 'search' | 'auth' | 'profile' | 'operations' | 'results' | 'passengers' | 'seats' | 'review' | 'payment' | 'trips';
+type OpsOperation = 'airline' | 'airport' | 'flight' | 'seats' | 'flight-control' | 'bookings' | 'users';
 
 declare global {
   interface Window {
@@ -40,7 +41,7 @@ interface RazorpayOptions {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, CurrencyPipe, DatePipe, TitleCasePipe],
+  imports: [CommonModule, ReactiveFormsModule, CurrencyPipe, TitleCasePipe],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })
@@ -69,8 +70,16 @@ export class AppComponent {
   readonly tripFlights = signal<Record<string, Flight>>({});
   readonly tripAirlines = signal<Record<string, Airline>>({});
   readonly notifications = signal<NotificationItem[]>([]);
+  readonly opsFlights = signal<Flight[]>([]);
+  readonly opsAirlines = signal<Airline[]>([]);
+  readonly opsAirports = signal<Airport[]>([]);
+  readonly opsBookings = signal<Booking[]>([]);
+  readonly opsUsers = signal<User[]>([]);
+  readonly activeOperation = signal<OpsOperation>('flight');
 
   readonly user = computed(() => this.api.currentUser());
+  readonly canManageOperations = computed(() => ['ADMIN', 'AIRLINE_STAFF'].includes(this.user()?.role ?? ''));
+  readonly isAdmin = computed(() => this.user()?.role === 'ADMIN');
   readonly progress = computed(() => {
     const order: Step[] = ['search', 'results', 'passengers', 'seats', 'review', 'payment'];
     return Math.max(order.indexOf(this.step()), 0);
@@ -82,8 +91,7 @@ export class AppComponent {
     password: ['', [Validators.required, Validators.minLength(8)]],
     phone: [''],
     passportNumber: [''],
-    nationality: ['Indian'],
-    role: ['PASSENGER']
+    nationality: ['Indian']
   });
 
   readonly otpForm = this.fb.group({
@@ -99,20 +107,14 @@ export class AppComponent {
     returnDate: ['', this.optionalTravelDateValidator.bind(this)]
   });
 
-  readonly airportOptions: AirportOption[] = [
+  private readonly fallbackAirportOptions: AirportOption[] = [
     { code: 'DEL', city: 'Delhi', name: 'Indira Gandhi International' },
     { code: 'BOM', city: 'Mumbai', name: 'Chhatrapati Shivaji Maharaj International' },
     { code: 'BLR', city: 'Bengaluru', name: 'Kempegowda International' },
     { code: 'HYD', city: 'Hyderabad', name: 'Rajiv Gandhi International' },
-    { code: 'MAA', city: 'Chennai', name: 'Chennai International' },
-    { code: 'CCU', city: 'Kolkata', name: 'Netaji Subhas Chandra Bose International' },
-    { code: 'PNQ', city: 'Pune', name: 'Pune International' },
-    { code: 'GOI', city: 'Goa', name: 'Dabolim Airport' },
-    { code: 'AMD', city: 'Ahmedabad', name: 'Sardar Vallabhbhai Patel International' },
-    { code: 'COK', city: 'Kochi', name: 'Cochin International' },
-    { code: 'JAI', city: 'Jaipur', name: 'Jaipur International' },
-    { code: 'LKO', city: 'Lucknow', name: 'Chaudhary Charan Singh International' }
+    { code: 'MAA', city: 'Chennai', name: 'Chennai International' }
   ];
+  readonly airportOptions = signal<AirportOption[]>(this.fallbackAirportOptions);
 
   readonly detailsForm = this.fb.group({
     contactEmail: ['', [Validators.required, Validators.email]],
@@ -134,8 +136,55 @@ export class AppComponent {
     nationality: ['', Validators.maxLength(50)]
   });
 
+  readonly airlineForm = this.fb.group({
+    name: ['', Validators.required],
+    iataCode: ['', Validators.required],
+    icaoCode: [''],
+    country: ['India'],
+    contactEmail: [''],
+    contactPhone: [''],
+    logoUrl: ['']
+  });
+
+  readonly airportForm = this.fb.group({
+    name: ['', Validators.required],
+    iataCode: ['', [Validators.required, Validators.pattern(/^[A-Za-z]{3}$/)]],
+    icaoCode: [''],
+    city: [''],
+    country: ['India'],
+    timezone: ['Asia/Kolkata'],
+    latitude: [null as number | null],
+    longitude: [null as number | null]
+  });
+
+  readonly flightForm = this.fb.group({
+    flightNumber: ['', Validators.required],
+    airlineId: ['', Validators.required],
+    originAirportCode: ['DEL', [Validators.required, Validators.pattern(/^[A-Za-z]{3}$/)]],
+    destinationAirportCode: ['BOM', [Validators.required, Validators.pattern(/^[A-Za-z]{3}$/)]],
+    departureTime: ['', Validators.required],
+    arrivalTime: ['', Validators.required],
+    aircraftType: ['Airbus A320', Validators.required],
+    totalSeats: [180, [Validators.required, Validators.min(1)]],
+    basePrice: [4500, [Validators.required, Validators.min(1)]]
+  });
+
+  readonly seatInventoryForm = this.fb.group({
+    flightId: ['', Validators.required],
+    rows: [30, [Validators.required, Validators.min(1)]],
+    columns: ['A,B,C,D,E,F', Validators.required],
+    seatClass: ['ECONOMY', Validators.required],
+    priceMultiplier: [1, [Validators.required, Validators.min(0.1)]]
+  });
+
+  readonly opsFlightFilterForm = this.fb.group({
+    flightId: [''],
+    status: ['ON_TIME']
+  });
+
   constructor() {
     this.syncPassengerForms(1);
+    this.loadAirportOptions();
     document.documentElement.dataset['theme'] = this.theme();
     const user = this.user();
     if (user) {
@@ -158,6 +207,61 @@ export class AppComponent {
 
   get passengerForms() {
     return this.detailsForm.controls.passengers as FormArray;
+  }
+
+  isOperationActive(operation: OpsOperation) {
+    return this.activeOperation() === operation;
+  }
+
+  selectOperation(operation: OpsOperation) {
+    this.activeOperation.set(operation);
+  }
+
+  displayFlightDateTime(value: string | null | undefined, format: 'short' | 'card' | 'fullDate' = 'card') {
+    if (!value) {
+      return '-';
+    }
+
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!match) {
+      return value;
+    }
+
+    const [, year, month, day, hour, minute] = match;
+    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+
+    if (format === 'fullDate') {
+      return new Intl.DateTimeFormat('en-IN', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }).format(date);
+    }
+
+    const options: Intl.DateTimeFormatOptions = format === 'short'
+      ? { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }
+      : { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true };
+
+    return new Intl.DateTimeFormat('en-IN', options).format(date);
+  }
+
+  private loadAirportOptions() {
+    this.api.getAllAirports().subscribe({
+      next: (airports) => {
+        const options = airports
+          .filter((airport) => airport.active !== false)
+          .map((airport) => ({
+            code: airport.iataCode,
+            city: airport.city || airport.name,
+            name: airport.name
+          }))
+          .filter((airport) => !!airport.code && !!airport.city);
+
+        this.airportOptions.set(options.length ? options : this.fallbackAirportOptions);
+      },
+      error: () => this.airportOptions.set(this.fallbackAirportOptions)
+    });
   }
 
   authenticate() {
@@ -196,6 +300,8 @@ export class AppComponent {
         if (pending) {
           this.pendingFlight.set(null);
           this.chooseFlight(pending);
+        } else if (['ADMIN', 'AIRLINE_STAFF'].includes(res.user.role)) {
+          this.loadOperations();
         } else {
           this.goTo('search', '/');
         }
@@ -234,6 +340,8 @@ export class AppComponent {
         if (pending) {
           this.pendingFlight.set(null);
           this.chooseFlight(pending);
+        } else if (['ADMIN', 'AIRLINE_STAFF'].includes(res.user.role)) {
+          this.loadOperations();
         } else {
           this.goTo('search', '/');
         }
@@ -574,7 +682,7 @@ export class AppComponent {
               <div class="box"><strong>Booking ID</strong><br>${booking.bookingId}</div>
               <div class="box"><strong>Flight</strong><br>${flight.flightNumber}</div>
               <div class="box"><strong>Route</strong><br>${flight.originAirportCode} to ${flight.destinationAirportCode}</div>
-              <div class="box"><strong>Departure</strong><br>${new Date(flight.departureTime).toLocaleString()}</div>
+              <div class="box"><strong>Departure</strong><br>${this.displayFlightDateTime(flight.departureTime, 'card')}</div>
               <div class="box"><strong>Seats</strong><br>${booking.seatIds.join(', ')}</div>
               <div class="box"><strong>Passengers</strong><br>${passengerNames}</div>
               <div class="box"><strong>Status</strong><br>${booking.status}</div>
@@ -631,6 +739,204 @@ export class AppComponent {
         this.loading.set(false);
       },
       error: (err) => this.handleError(err, 'Could not load your bookings.')
+    });
+  }
+
+  loadOperations() {
+    this.clearMessages();
+    if (!this.canManageOperations()) {
+      this.goTo('auth', '/login');
+      return;
+    }
+
+    if (!this.isAdmin() && ['airline', 'airport', 'users'].includes(this.activeOperation())) {
+      this.activeOperation.set('flight');
+    }
+
+    this.goTo('operations', '/operations');
+    this.loading.set(true);
+    this.api.getAllFlights().subscribe({
+      next: (flights) => {
+        this.opsFlights.set(flights);
+        if (!this.flightForm.value.airlineId && this.opsAirlines().length) {
+          this.flightForm.patchValue({ airlineId: this.opsAirlines()[0].airlineId });
+        }
+        this.loading.set(false);
+      },
+      error: (err) => this.handleError(err, 'Could not load flight operations.')
+    });
+    this.api.getAllAirlines().subscribe({
+      next: (airlines) => {
+        this.opsAirlines.set(airlines);
+        if (!this.flightForm.value.airlineId && airlines.length) {
+          this.flightForm.patchValue({ airlineId: airlines[0].airlineId });
+        }
+      },
+      error: () => this.opsAirlines.set([])
+    });
+    this.api.getAllAirports().subscribe({
+      next: (airports) => this.opsAirports.set(airports),
+      error: () => this.opsAirports.set([])
+    });
+    if (this.isAdmin()) {
+      this.api.getAllUsers().subscribe({
+        next: (users) => this.opsUsers.set(users),
+        error: () => this.opsUsers.set([])
+      });
+    }
+  }
+
+  createAirline() {
+    this.clearMessages();
+    if (!this.isAdmin() || this.airlineForm.invalid) {
+      this.airlineForm.markAllAsTouched();
+      return;
+    }
+
+    this.loading.set(true);
+    this.api.createAirline(this.cleanPayload(this.airlineForm.getRawValue())).subscribe({
+      next: () => {
+        this.toast.set('Airline added successfully.');
+        this.airlineForm.reset({ country: 'India' });
+        this.loadOperations();
+      },
+      error: (err) => this.handleError(err, 'Airline could not be added.')
+    });
+  }
+
+  createAirport() {
+    this.clearMessages();
+    if (!this.isAdmin() || this.airportForm.invalid) {
+      this.airportForm.markAllAsTouched();
+      return;
+    }
+
+    this.loading.set(true);
+    this.api.createAirport(this.cleanPayload(this.airportForm.getRawValue())).subscribe({
+      next: () => {
+        this.toast.set('Airport added successfully.');
+        this.airportForm.reset({ country: 'India', timezone: 'Asia/Kolkata' });
+        this.loadAirportOptions();
+        this.loadOperations();
+      },
+      error: (err) => this.handleError(err, 'Airport could not be added.')
+    });
+  }
+
+  createFlight() {
+    this.clearMessages();
+    if (!this.canManageOperations() || this.flightForm.invalid) {
+      this.flightForm.markAllAsTouched();
+      return;
+    }
+
+    this.loading.set(true);
+    this.api.createFlight(this.cleanPayload(this.flightForm.getRawValue())).subscribe({
+      next: () => {
+        this.toast.set('Flight added successfully. Add seat inventory before opening bookings.');
+        this.flightForm.patchValue({ flightNumber: '', departureTime: '', arrivalTime: '' });
+        this.loadOperations();
+      },
+      error: (err) => this.handleError(err, 'Flight could not be added.')
+    });
+  }
+
+  updateOpsFlightStatus(flightId: string) {
+    const status = this.opsFlightFilterForm.value.status ?? 'ON_TIME';
+    this.loading.set(true);
+    this.api.updateFlightStatus(flightId, status).subscribe({
+      next: () => {
+        this.toast.set(`Flight status changed to ${status}.`);
+        this.loadOperations();
+      },
+      error: (err) => this.handleError(err, 'Flight status could not be updated.')
+    });
+  }
+
+  deleteOpsFlight(flightId: string) {
+    this.loading.set(true);
+    this.api.deleteFlight(flightId).subscribe({
+      next: () => {
+        this.toast.set('Flight deleted successfully.');
+        this.loadOperations();
+      },
+      error: (err) => this.handleError(err, 'Flight could not be deleted.')
+    });
+  }
+
+  addSeatInventory() {
+    this.clearMessages();
+    if (!this.canManageOperations() || this.seatInventoryForm.invalid) {
+      this.seatInventoryForm.markAllAsTouched();
+      return;
+    }
+
+    const value = this.seatInventoryForm.getRawValue();
+    const columns = (value.columns ?? 'A,B,C,D,E,F')
+      .split(',')
+      .map((column) => column.trim().toUpperCase())
+      .filter(Boolean);
+    const seats = Array.from({ length: Number(value.rows ?? 0) }, (_, index) => index + 1)
+      .flatMap((rowNumber) => columns.map((columnLetter, index) => ({
+        seatNumber: `${rowNumber}${columnLetter}`,
+        seatClass: value.seatClass,
+        rowNumber,
+        columnLetter,
+        windowSeat: index === 0 || index === columns.length - 1,
+        aisleSeat: index === 2 || index === 3,
+        extraLegroom: rowNumber <= 2,
+        priceMultiplier: Number(value.priceMultiplier ?? 1),
+        status: 'AVAILABLE'
+      })));
+
+    this.loading.set(true);
+    this.api.addSeatsForFlight(value.flightId ?? '', seats).subscribe({
+      next: () => {
+        this.toast.set(`${seats.length} seats added for this flight.`);
+        this.loadOperations();
+      },
+      error: (err) => this.handleError(err, 'Seat inventory could not be added.')
+    });
+  }
+
+  releaseExpiredHolds() {
+    this.loading.set(true);
+    this.api.releaseExpiredSeats().subscribe({
+      next: (res) => {
+        this.toast.set(res.message);
+        this.loadOperations();
+      },
+      error: (err) => this.handleError(err, 'Expired holds could not be released.')
+    });
+  }
+
+  loadFlightBookings() {
+    const flightId = this.opsFlightFilterForm.value.flightId;
+    if (!flightId) {
+      this.error.set('Select a flight to view bookings.');
+      return;
+    }
+
+    this.activeOperation.set('bookings');
+    this.loading.set(true);
+    this.api.getBookingsByFlight(flightId).subscribe({
+      next: (bookings) => {
+        this.opsBookings.set(bookings);
+        this.loading.set(false);
+      },
+      error: (err) => this.handleError(err, 'Could not load bookings for this flight.')
+    });
+  }
+
+  toggleUserActive(user: User) {
+    const request = user.active ? this.api.suspendUser(user.userId) : this.api.reactivateUser(user.userId);
+    this.loading.set(true);
+    request.subscribe({
+      next: (res) => {
+        this.toast.set(res.message);
+        this.loadOperations();
+      },
+      error: (err) => this.handleError(err, 'User status could not be changed.')
     });
   }
 
@@ -973,6 +1279,8 @@ export class AppComponent {
         if (pending) {
           this.pendingFlight.set(null);
           this.chooseFlight(pending);
+        } else if (['ADMIN', 'AIRLINE_STAFF'].includes(user.role)) {
+          this.loadOperations();
         } else {
           this.goTo('search', '/');
         }
@@ -1009,6 +1317,15 @@ export class AppComponent {
     if (path === '/trips') {
       if (this.user()) {
         this.loadTrips();
+      } else {
+        this.step.set('auth');
+      }
+      return;
+    }
+
+    if (path === '/operations') {
+      if (this.canManageOperations()) {
+        this.loadOperations();
       } else {
         this.step.set('auth');
       }
@@ -1052,5 +1369,17 @@ export class AppComponent {
       return body?.message ?? body?.error ?? '';
     }
     return '';
+  }
+
+  private cleanPayload<T extends Record<string, unknown>>(payload: T) {
+    return Object.fromEntries(
+      Object.entries(payload).map(([key, value]) => {
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          return [key, trimmed === '' ? null : trimmed];
+        }
+        return [key, value];
+      })
+    );
   }
 }

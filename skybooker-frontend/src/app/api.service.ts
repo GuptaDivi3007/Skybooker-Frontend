@@ -5,12 +5,14 @@ import { environment } from '../environments/environment';
 import {
   AuthResponse,
   Airline,
+  Airport,
   Booking,
   BookingRequest,
   FareSummary,
   Flight,
   FlightSearchRequest,
   NotificationItem,
+  MessageResponse,
   Payment,
   RazorpayOrder,
   RegistrationOtpResponse,
@@ -92,8 +94,52 @@ export class ApiService {
     return this.http.get<Airline[]>(`${this.baseUrl}/airlines`);
   }
 
+  createAirline(payload: Record<string, unknown>) {
+    return this.http.post<Airline>(`${this.baseUrl}/airlines`, payload);
+  }
+
+  deleteAirline(airlineId: string) {
+    return this.http.delete<MessageResponse>(`${this.baseUrl}/airlines/${airlineId}`);
+  }
+
+  getAllAirports() {
+    return this.http.get<Airport[]>(`${this.baseUrl}/airports`);
+  }
+
+  createAirport(payload: Record<string, unknown>) {
+    return this.http.post<Airport>(`${this.baseUrl}/airports`, payload);
+  }
+
+  deleteAirport(airportId: string) {
+    return this.http.delete<MessageResponse>(`${this.baseUrl}/airports/${airportId}`);
+  }
+
+  createFlight(payload: Record<string, unknown>) {
+    return this.http.post<Flight>(`${this.baseUrl}/flights`, payload);
+  }
+
+  updateFlightStatus(flightId: string, status: string) {
+    return this.http.put<Flight>(`${this.baseUrl}/flights/${flightId}/status`, { status });
+  }
+
+  deleteFlight(flightId: string) {
+    return this.http.delete<MessageResponse>(`${this.baseUrl}/flights/${flightId}`);
+  }
+
   getSeatMap(flightId: string) {
     return this.http.get<SeatMap>(`${this.baseUrl}/seats/flight/${flightId}/map`);
+  }
+
+  addSeatsForFlight(flightId: string, seats: Record<string, unknown>[]) {
+    return this.http.post<Seat[]>(`${this.baseUrl}/seats/flight/${flightId}`, { seats });
+  }
+
+  deleteSeatsForFlight(flightId: string) {
+    return this.http.delete<MessageResponse>(`${this.baseUrl}/seats/flight/${flightId}`);
+  }
+
+  releaseExpiredSeats() {
+    return this.http.put<MessageResponse>(`${this.baseUrl}/seats/release-expired`, {});
   }
 
   holdSeat(seatId: string) {
@@ -136,6 +182,10 @@ export class ApiService {
     return this.http.get<Booking[]>(`${this.baseUrl}/bookings`);
   }
 
+  getBookingsByFlight(flightId: string) {
+    return this.http.get<Booking[]>(`${this.baseUrl}/bookings/flight/${flightId}`);
+  }
+
   getBookingByPnr(pnr: string) {
     return this.http.get<Booking>(`${this.baseUrl}/bookings/pnr/${pnr}`);
   }
@@ -146,6 +196,18 @@ export class ApiService {
 
   getAdminAppNotifications() {
     return this.http.get<NotificationItem[]>(`${this.baseUrl}/notifications/admin/app`);
+  }
+
+  getAllUsers() {
+    return this.http.get<User[]>(`${this.baseUrl}/admin/users`);
+  }
+
+  suspendUser(userId: string) {
+    return this.http.put<MessageResponse>(`${this.baseUrl}/admin/users/${userId}/suspend`, {});
+  }
+
+  reactivateUser(userId: string) {
+    return this.http.put<MessageResponse>(`${this.baseUrl}/admin/users/${userId}/reactivate`, {});
   }
 
   private persistAuth(res: AuthResponse) {

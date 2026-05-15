@@ -123,13 +123,19 @@ nav {
 
 nav button,
 .ghost,
-.theme-toggle {
+.theme-toggle,
+.danger {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.7);
   color: var(--ink);
   padding: 10px 14px;
   font-weight: 700;
+}
+
+.danger {
+  border-color: #ffd2d2;
+  color: var(--red);
 }
 
 .user-pill,
@@ -628,6 +634,7 @@ legend {
 
 :host-context([data-theme="dark"]) nav button,
 :host-context([data-theme="dark"]) .ghost,
+:host-context([data-theme="dark"]) .danger,
 :host-context([data-theme="dark"]) .theme-toggle,
 :host-context([data-theme="dark"]) .profile-trigger,
 :host-context([data-theme="dark"]) .profile-popover button,
@@ -635,9 +642,16 @@ legend {
 :host-context([data-theme="dark"]) input,
 :host-context([data-theme="dark"]) select,
 :host-context([data-theme="dark"]) .flight-card,
-:host-context([data-theme="dark"]) .seat {
+:host-context([data-theme="dark"]) .seat,
+:host-context([data-theme="dark"]) .operation-strip button,
+:host-context([data-theme="dark"]) .ops-table article,
+:host-context([data-theme="dark"]) .ops-list button {
   background: #0d2036;
   color: var(--ink);
+}
+
+:host-context([data-theme="dark"]) .operation-strip button.active {
+  background: #102f52;
 }
 
 :host-context([data-theme="dark"]) .segmented {
@@ -840,8 +854,142 @@ legend {
 }
 
 .profile-card,
-.profile-form {
+.profile-form,
+.ops-panel {
   padding: 22px;
+}
+
+.operations-page {
+  gap: 18px;
+}
+
+.compact-head {
+  margin-bottom: 0;
+}
+
+.ops-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ops-stat-grid span,
+.ops-panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 16px 48px rgba(7, 23, 45, 0.08);
+}
+
+.ops-stat-grid span {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+}
+
+.ops-stat-grid strong {
+  color: var(--ink);
+  font-size: 28px;
+}
+
+.ops-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.operation-strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 2px 12px;
+  scrollbar-width: thin;
+}
+
+.operation-strip button {
+  display: grid;
+  flex: 0 0 170px;
+  gap: 6px;
+  min-height: 78px;
+  align-content: center;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  padding: 14px;
+  text-align: left;
+  box-shadow: 0 10px 24px rgba(7, 23, 45, 0.07);
+}
+
+.operation-strip button.active {
+  border-color: var(--blue);
+  background: #eaf4ff;
+  box-shadow: 0 16px 34px rgba(8, 120, 255, 0.16);
+}
+
+.operation-strip strong {
+  font-size: 15px;
+}
+
+.operation-strip small {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.operation-content {
+  display: grid;
+  gap: 18px;
+}
+
+.two-column {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ops-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.inline-form {
+  display: flex;
+  min-width: min(520px, 100%);
+}
+
+.ops-table,
+.ops-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ops-table article {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 120px auto 150px auto auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.ops-table article div,
+.ops-list button {
+  display: grid;
+  gap: 4px;
+}
+
+.ops-table small,
+.ops-list small {
+  color: var(--muted);
+}
+
+.ops-list button {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--ink);
+  padding: 12px;
+  text-align: left;
 }
 
 .profile-card {
@@ -890,14 +1038,16 @@ legend {
   .seat-layout,
   .review-grid,
   .profile-section,
-  .trip-detail-card {
+  .trip-detail-card,
+  .two-column {
     grid-template-columns: 1fr;
   }
 
   .search-card,
   .three,
   .four,
-  .flight-card {
+  .flight-card,
+  .ops-table article {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -940,7 +1090,10 @@ legend {
   .trip-meta-grid,
   .stepper,
   .pnr-search,
-  .hero-stats {
+  .hero-stats,
+  .ops-stat-grid,
+  .ops-table article,
+  .inline-form {
     grid-template-columns: 1fr;
   }
 

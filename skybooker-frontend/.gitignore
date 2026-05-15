@@ -21,3 +21,7 @@ Thumbs.db
 # Java / Maven / Spring Boot
 target/
 *.class
+
+# Test / coverage
+coverage/
+out-tsc/

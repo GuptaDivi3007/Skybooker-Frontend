@@ -1,6 +1,6 @@
 export type Role = 'PASSENGER' | 'ADMIN' | 'AIRLINE_STAFF';
 export type TripType = 'ONE_WAY' | 'ROUND_TRIP';
-export type MealPreference = 'NONE' | 'VEG' | 'NON_VEG' | 'VEGAN';
+export type MealPreference = 'NONE' | 'VEG' | 'NON_VEG';
 export type SeatStatus = 'AVAILABLE' | 'HELD' | 'CONFIRMED' | 'BLOCKED';
 
 export interface User {
@@ -44,6 +44,19 @@ export interface Airline {
   active: boolean;
 }
 
+export interface Airport {
+  airportId: string;
+  name: string;
+  iataCode: string;
+  icaoCode?: string;
+  city?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  timezone?: string;
+  active: boolean;
+}
+
 export interface Flight {
   flightId: string;
   flightNumber: string;
@@ -71,7 +84,7 @@ export interface Seat {
   seatId: string;
   flightId: string;
   seatNumber: string;
-  seatClass: 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST';
+  seatClass: 'ECONOMY' | 'BUSINESS' | 'FIRST';
   rowNumber: number;
   columnLetter: string;
   windowSeat: boolean;
@@ -198,4 +211,8 @@ export interface NotificationItem {
   failureReason?: string;
   createdAt: string;
   sentAt?: string;
+}
+
+export interface MessageResponse {
+  message: string;
 }
