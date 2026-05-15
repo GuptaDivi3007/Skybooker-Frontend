@@ -1,0 +1,715 @@
+<div class="shell">
+  <header class="topbar">
+    <button class="brand" type="button" (click)="goTo('search', '/')" aria-label="SkyBooker home">
+      <span class="brand-mark">SB</span>
+      <span>
+        <strong>SkyBooker</strong>
+        <small>Airline reservations</small>
+      </span>
+    </button>
+
+    <nav>
+      <button type="button" (click)="goTo('search', '/')">Search</button>
+      <button type="button" (click)="loadTrips()" [disabled]="!user()">Trips</button>
+      @if (canManageOperations()) {
+        <button type="button" (click)="loadOperations()">Dashboard</button>
+      }
+      <button class="theme-toggle" type="button" (click)="toggleTheme()" [attr.aria-label]="'Switch to ' + (theme() === 'light' ? 'dark' : 'light') + ' mode'">
+        {{ theme() === 'light' ? 'Dark' : 'Light' }}
+      </button>
+      @if (user()) {
+        <div class="profile-menu">
+          <button class="profile-trigger" type="button" (click)="profileMenuOpen.set(!profileMenuOpen())">
+            <span>{{ user()?.fullName?.charAt(0) }}</span>
+            <strong>Profile</strong>
+          </button>
+          @if (profileMenuOpen()) {
+            <div class="profile-popover">
+              <div>
+                <strong>{{ user()?.fullName }}</strong>
+                <small>{{ user()?.role | titlecase }}</small>
+              </div>
+              <button type="button" (click)="openProfile()">Edit profile</button>
+              <button type="button" (click)="logout()">Sign out</button>
+            </div>
+          }
+        </div>
+      } @else {
+        <button class="ghost" type="button" (click)="goTo('auth', '/login')">Login / Signup</button>
+      }
+    </nav>
+  </header>
+
+  <main>
+    @if (step() === 'auth') {
+      <section class="auth-page">
+        <div class="auth-copy">
+          <p class="eyebrow">Secure access</p>
+          <h1>Login to complete your booking.</h1>
+          <p>Create an account or sign in to save passengers, hold seats, make payments, and track your PNR.</p>
+        </div>
+
+        <aside class="auth-panel">
+          <div class="panel-head">
+            <h2>{{ authMode() === 'login' ? 'Welcome back' : 'Create account' }}</h2>
+            <div class="segmented">
+              <button type="button" [class.active]="authMode() === 'login'" (click)="switchAuthMode('login')">Login</button>
+              <button type="button" [class.active]="authMode() === 'register'" (click)="switchAuthMode('register')">Register</button>
+            </div>
+          </div>
+
+          <form [formGroup]="authForm" (ngSubmit)="authenticate()">
+            <button class="google-button" type="button" (click)="continueWithGoogle()">
+              <span>G</span>
+              Continue with Google
+            </button>
+            <div class="auth-divider"><span>or</span></div>
+            @if (authMode() === 'register') {
+              <label>Full name <input formControlName="fullName" placeholder="Aarav Mehta"></label>
+            }
+            <label>Email <input formControlName="email" type="email" placeholder="you@example.com"></label>
+            <label>Password <input formControlName="password" type="password" placeholder="Minimum 8 characters"></label>
+            @if (authMode() === 'register') {
+              <div class="form-grid two">
+                <label>Phone <input formControlName="phone" placeholder="+91 98765 43210"></label>
+                <label>Passport <input formControlName="passportNumber" placeholder="P1234567"></label>
+                <label>Nationality <input formControlName="nationality"></label>
+              </div>
+            }
+            @if (authMode() === 'register' && registrationToken()) {
+              <div class="otp-panel" [formGroup]="otpForm">
+                <p>OTP sent to {{ otpSentTo() }}. Verify your email to create the account.</p>
+                <label>Registration OTP <input formControlName="otp" maxlength="6" inputmode="numeric" placeholder="6-digit OTP"></label>
+                <button class="ghost" type="button" (click)="resetRegistrationOtp()">Edit details / resend OTP</button>
+              </div>
+            }
+            <button class="primary wide" type="submit" [disabled]="loading()">
+              {{ authMode() === 'login' ? 'Sign in' : (registrationToken() ? 'Verify OTP and register' : 'Send OTP') }}
+            </button>
+          </form>
+        </aside>
+      </section>
+    } @else if (step() === 'profile') {
+      <section class="standalone-page">
+        @if (toast()) {
+          <div class="message success">{{ toast() }}</div>
+        }
+        @if (error()) {
+          <div class="message error">{{ error() }}</div>
+        }
+
+        <div class="section-head inline">
+          <div>
+            <p class="eyebrow">Profile</p>
+            <h1>Edit your profile</h1>
+            <p class="page-copy">Manage the passenger information used for flight booking.</p>
+          </div>
+          <button class="ghost" type="button" (click)="goTo('search', '/')">Back to search</button>
+        </div>
+
+        <div class="profile-section">
+          <aside class="profile-card">
+            <span class="profile-avatar">{{ user()?.fullName?.charAt(0) }}</span>
+            <h3>{{ user()?.fullName }}</h3>
+            <p>{{ user()?.email }}</p>
+            <span class="tag">{{ user()?.role | titlecase }}</span>
+          </aside>
+
+          <form class="profile-form" [formGroup]="profileForm" (ngSubmit)="saveProfile()">
+            <div class="form-grid two">
+              <label>Full name <input formControlName="fullName"></label>
+              <label>Phone <input formControlName="phone"></label>
+              <label>Passport number <input formControlName="passportNumber"></label>
+              <label>Nationality <input formControlName="nationality"></label>
+            </div>
+            <button class="primary" type="submit" [disabled]="loading()">Save profile</button>
+          </form>
+        </div>
+      </section>
+    } @else if (step() === 'operations') {
+      <section class="standalone-page operations-page">
+        @if (toast()) {
+          <div class="message success">{{ toast() }}</div>
+        }
+        @if (error()) {
+          <div class="message error">{{ error() }}</div>
+        }
+
+        <div class="section-head inline">
+          <div>
+            <p class="eyebrow">{{ user()?.role | titlecase }} dashboard</p>
+            <h1>SkyBooker operations</h1>
+            <p class="page-copy">
+              Manage flights, seat inventory, and booking operations from one workspace.
+            </p>
+          </div>
+          <button class="ghost" type="button" (click)="goTo('search', '/')">Traveller search</button>
+        </div>
+
+        <div class="ops-stat-grid">
+          <span><small>Flights</small><strong>{{ opsFlights().length }}</strong></span>
+          <span><small>Airlines</small><strong>{{ opsAirlines().length }}</strong></span>
+          <span><small>Airports</small><strong>{{ opsAirports().length }}</strong></span>
+          <span><small>Role</small><strong>{{ user()?.role | titlecase }}</strong></span>
+        </div>
+
+        <div class="operation-strip" aria-label="Operations">
+          @if (isAdmin()) {
+            <button type="button" [class.active]="isOperationActive('airline')" (click)="selectOperation('airline')">
+              <strong>Add airline</strong>
+              <small>Admin</small>
+            </button>
+            <button type="button" [class.active]="isOperationActive('airport')" (click)="selectOperation('airport')">
+              <strong>Add airport</strong>
+              <small>Admin</small>
+            </button>
+          }
+          <button type="button" [class.active]="isOperationActive('flight')" (click)="selectOperation('flight')">
+            <strong>Add flight</strong>
+            <small>Admin / Staff</small>
+          </button>
+          <button type="button" [class.active]="isOperationActive('seats')" (click)="selectOperation('seats')">
+            <strong>Add seats</strong>
+            <small>Admin / Staff</small>
+          </button>
+          <button type="button" [class.active]="isOperationActive('flight-control')" (click)="selectOperation('flight-control')">
+            <strong>Flight control</strong>
+            <small>Admin / Staff</small>
+          </button>
+          <button type="button" [class.active]="isOperationActive('bookings')" (click)="selectOperation('bookings')">
+            <strong>Bookings</strong>
+            <small>Admin / Staff</small>
+          </button>
+          @if (isAdmin()) {
+            <button type="button" [class.active]="isOperationActive('users')" (click)="selectOperation('users')">
+              <strong>User access</strong>
+              <small>Admin</small>
+            </button>
+          }
+        </div>
+
+        @if (isOperationActive('airline') && isAdmin()) {
+          <div class="operation-content">
+            <form class="ops-panel" [formGroup]="airlineForm" (ngSubmit)="createAirline()">
+              <div>
+                <p class="eyebrow">Admin</p>
+                <h3>Add airline</h3>
+              </div>
+              <div class="form-grid two">
+                <label>Name <input formControlName="name" placeholder="Sky India"></label>
+                <label>IATA <input formControlName="iataCode" placeholder="SI"></label>
+                <label>ICAO <input formControlName="icaoCode" placeholder="SKI"></label>
+                <label>Country <input formControlName="country"></label>
+                <label>Contact email <input formControlName="contactEmail"></label>
+                <label>Contact phone <input formControlName="contactPhone"></label>
+              </div>
+              <label>Logo URL <input formControlName="logoUrl"></label>
+              <button class="primary" type="submit" [disabled]="loading()">Add airline</button>
+            </form>
+          </div>
+        }
+
+        @if (isOperationActive('airport') && isAdmin()) {
+          <div class="operation-content">
+            <form class="ops-panel" [formGroup]="airportForm" (ngSubmit)="createAirport()">
+              <div>
+                <p class="eyebrow">Admin</p>
+                <h3>Add airport</h3>
+              </div>
+              <div class="form-grid two">
+                <label>Name <input formControlName="name" placeholder="Indira Gandhi International"></label>
+                <label>IATA <input formControlName="iataCode" placeholder="DEL"></label>
+                <label>ICAO <input formControlName="icaoCode" placeholder="VIDP"></label>
+                <label>City <input formControlName="city" placeholder="Delhi"></label>
+                <label>Country <input formControlName="country"></label>
+                <label>Timezone <input formControlName="timezone"></label>
+              </div>
+              <button class="primary" type="submit" [disabled]="loading()">Add airport</button>
+            </form>
+          </div>
+        }
+
+        @if (isOperationActive('flight')) {
+          <div class="operation-content">
+            <form class="ops-panel" [formGroup]="flightForm" (ngSubmit)="createFlight()">
+              <div class="section-head inline compact-head">
+                <div>
+                  <p class="eyebrow">Admin / Staff</p>
+                  <h3>Add flight</h3>
+                </div>
+              </div>
+              <div class="form-grid four">
+                <label>Flight number <input formControlName="flightNumber" placeholder="SB101"></label>
+                <label>Airline
+                  <select formControlName="airlineId">
+                    @for (airline of opsAirlines(); track airline.airlineId) {
+                      <option [value]="airline.airlineId">{{ airline.name }}</option>
+                    }
+                  </select>
+                </label>
+                <label>From <input formControlName="originAirportCode" placeholder="DEL"></label>
+                <label>To <input formControlName="destinationAirportCode" placeholder="BOM"></label>
+                <label>Departure <input formControlName="departureTime" type="datetime-local"></label>
+                <label>Arrival <input formControlName="arrivalTime" type="datetime-local"></label>
+                <label>Aircraft <input formControlName="aircraftType"></label>
+                <label>Total seats <input formControlName="totalSeats" type="number" min="1"></label>
+                <label>Base price <input formControlName="basePrice" type="number" min="1"></label>
+              </div>
+              <button class="primary" type="submit" [disabled]="loading()">Create flight</button>
+            </form>
+          </div>
+        }
+
+        @if (isOperationActive('seats')) {
+          <div class="operation-content">
+            <form class="ops-panel" [formGroup]="seatInventoryForm" (ngSubmit)="addSeatInventory()">
+              <div>
+                <p class="eyebrow">Admin / Staff</p>
+                <h3>Add seats to flight</h3>
+              </div>
+              <label>Flight
+                <select formControlName="flightId">
+                  <option value="">Select flight</option>
+                  @for (flight of opsFlights(); track flight.flightId) {
+                    <option [value]="flight.flightId">{{ flight.flightNumber }} / {{ flight.originAirportCode }} to {{ flight.destinationAirportCode }}</option>
+                  }
+                </select>
+              </label>
+              <div class="form-grid two">
+                <label>Rows <input formControlName="rows" type="number" min="1"></label>
+                <label>Columns <input formControlName="columns" placeholder="A,B,C,D,E,F"></label>
+                <label>Class
+                  <select formControlName="seatClass">
+                    <option>ECONOMY</option>
+                    <option>BUSINESS</option>
+                    <option>FIRST</option>
+                  </select>
+                </label>
+                <label>Price multiplier <input formControlName="priceMultiplier" type="number" step="0.1"></label>
+              </div>
+              <button class="primary" type="submit" [disabled]="loading()">Add seats</button>
+              <button class="ghost" type="button" (click)="releaseExpiredHolds()">Release expired holds</button>
+            </form>
+          </div>
+        }
+
+        @if (isOperationActive('flight-control')) {
+          <div class="operation-content">
+            <div class="ops-panel">
+              <div class="section-head inline compact-head">
+                <div>
+                  <p class="eyebrow">Admin / Staff</p>
+                  <h3>Manage scheduled flights</h3>
+                </div>
+                <form class="inline-form" [formGroup]="opsFlightFilterForm" (ngSubmit)="loadFlightBookings()">
+                  <select formControlName="flightId">
+                    <option value="">Select flight</option>
+                    @for (flight of opsFlights(); track flight.flightId) {
+                      <option [value]="flight.flightId">{{ flight.flightNumber }} / {{ flight.status }}</option>
+                    }
+                  </select>
+                  <button class="ghost" type="submit">View bookings</button>
+                </form>
+              </div>
+
+              <div class="ops-table">
+                @for (flight of opsFlights(); track flight.flightId) {
+                  <article>
+                    <div>
+                      <strong>{{ flight.flightNumber }}</strong>
+                      <small>{{ flight.originAirportCode }} to {{ flight.destinationAirportCode }} / {{ displayFlightDateTime(flight.departureTime, 'short') }}</small>
+                    </div>
+                    <span>{{ flight.availableSeats }}/{{ flight.totalSeats }} seats</span>
+                    <span class="tag">{{ flight.status }}</span>
+                    <select [formControl]="opsFlightFilterForm.controls.status">
+                      <option>ON_TIME</option>
+                      <option>DELAYED</option>
+                      <option>CANCELLED</option>
+                      <option>DEPARTED</option>
+                      <option>ARRIVED</option>
+                    </select>
+                    <button class="ghost" type="button" (click)="updateOpsFlightStatus(flight.flightId)">Update</button>
+                    <button class="danger" type="button" (click)="deleteOpsFlight(flight.flightId)">Delete</button>
+                  </article>
+                } @empty {
+                  <div class="empty">No flights found.</div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+
+        @if (isOperationActive('bookings')) {
+          <div class="ops-panel">
+            <div class="section-head inline compact-head">
+              <div>
+                <p class="eyebrow">Admin / Staff</p>
+                <h3>Flight bookings</h3>
+              </div>
+              <form class="inline-form" [formGroup]="opsFlightFilterForm" (ngSubmit)="loadFlightBookings()">
+                <select formControlName="flightId">
+                  <option value="">Select flight</option>
+                  @for (flight of opsFlights(); track flight.flightId) {
+                    <option [value]="flight.flightId">{{ flight.flightNumber }} / {{ flight.status }}</option>
+                  }
+                </select>
+                <button class="ghost" type="submit">Load bookings</button>
+              </form>
+            </div>
+            <div class="ops-list">
+              @for (booking of opsBookings(); track booking.bookingId) {
+                <button type="button">
+                  <strong>{{ booking.pnrCode || booking.bookingId }}</strong>
+                  <small>{{ booking.status }} / {{ booking.passengerCount }} passenger(s) / {{ booking.totalFare | currency:'INR' }}</small>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        @if (isOperationActive('users') && isAdmin()) {
+          <div class="ops-panel">
+            <p class="eyebrow">Admin</p>
+            <h3>User access</h3>
+            <div class="ops-table">
+              @for (account of opsUsers(); track account.userId) {
+                <article>
+                  <div>
+                    <strong>{{ account.fullName }}</strong>
+                    <small>{{ account.email }}</small>
+                  </div>
+                  <span class="tag">{{ account.role | titlecase }}</span>
+                  <span>{{ account.active ? 'Active' : 'Suspended' }}</span>
+                  <button class="ghost" type="button" (click)="toggleUserActive(account)">
+                    {{ account.active ? 'Suspend' : 'Reactivate' }}
+                  </button>
+                </article>
+              } @empty {
+                <div class="empty">No users loaded.</div>
+              }
+            </div>
+          </div>
+        }
+      </section>
+    } @else if (step() === 'trips') {
+      <section class="standalone-page">
+        @if (toast()) {
+          <div class="message success">{{ toast() }}</div>
+        }
+        @if (error()) {
+          <div class="message error">{{ error() }}</div>
+        }
+
+        <div class="section-head inline">
+          <div>
+            <p class="eyebrow">My trips</p>
+            <h1>Your bookings</h1>
+            <p class="page-copy">Review confirmed and pending tickets without returning to the search dashboard.</p>
+          </div>
+          <form class="pnr-search" [formGroup]="paymentForm" (ngSubmit)="findPnr()">
+            <input formControlName="pnr" placeholder="Search PNR">
+            <button class="ghost" type="submit">Find</button>
+          </form>
+        </div>
+
+        @if (pnrResult()) {
+          <article class="trip-card featured trip-detail-card">
+            <div>
+              <span class="tag">{{ pnrResult()?.status }}</span>
+              <h3>{{ tripRoute(pnrResult()) }}</h3>
+              <p>{{ displayFlightDateTime(tripFlight(pnrResult())?.departureTime, 'card') }}</p>
+            </div>
+            <div class="trip-meta-grid">
+              <span><small>Airline</small><strong>{{ tripAirline(pnrResult()) }}</strong></span>
+              <span><small>Flight</small><strong>{{ tripFlight(pnrResult())?.flightNumber || pnrResult()?.flightId }}</strong></span>
+              <span><small>PNR</small><strong>{{ pnrResult()?.pnrCode }}</strong></span>
+              <span><small>Passengers</small><strong>{{ pnrResult()?.passengerCount }}</strong></span>
+              <span><small>Seats</small><strong>{{ pnrResult()?.seatIds?.join(', ') || '-' }}</strong></span>
+              <span><small>Fare</small><strong>{{ pnrResult()?.totalFare | currency:'INR' }}</strong></span>
+            </div>
+          </article>
+        }
+        <div class="trip-list">
+          @for (trip of trips(); track trip.bookingId) {
+            <article class="trip-card trip-detail-card">
+              <div>
+                <span class="tag">{{ trip.status }}</span>
+                <h3>{{ tripRoute(trip) }}</h3>
+                <p>{{ displayFlightDateTime(tripFlight(trip)?.departureTime, 'card') }}</p>
+              </div>
+              <div class="trip-meta-grid">
+                <span><small>Airline</small><strong>{{ tripAirline(trip) }}</strong></span>
+                <span><small>Flight</small><strong>{{ tripFlight(trip)?.flightNumber || trip.flightId }}</strong></span>
+                <span><small>PNR</small><strong>{{ trip.pnrCode || '-' }}</strong></span>
+                <span><small>Passengers</small><strong>{{ trip.passengerCount }}</strong></span>
+                <span><small>Seats</small><strong>{{ trip.seatIds.join(', ') || '-' }}</strong></span>
+                <span><small>Fare</small><strong>{{ trip.totalFare | currency:'INR' }}</strong></span>
+              </div>
+            </article>
+          } @empty {
+            <div class="empty">No bookings yet.</div>
+          }
+        </div>
+      </section>
+    } @else {
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Premium flight booking system</p>
+        <h1>Plan your next journey with confidence.</h1>
+        <p>Compare routes, choose comfortable seats, review fares clearly, and keep every booking easy to track from search to boarding.</p>
+      </div>
+      <div class="hero-stats">
+        <span><strong>Fast</strong> flight search</span>
+        <span><strong>Live</strong> seat holds</span>
+        <span><strong>PNR</strong> tracking</span>
+      </div>
+    </section>
+
+    @if (toast()) {
+      <div class="message success">{{ toast() }}</div>
+    }
+    @if (error()) {
+      <div class="message error">{{ error() }}</div>
+    }
+
+    <section class="booking-surface">
+      <div class="stepper" aria-label="Booking progress">
+        @for (label of ['Search', 'Select', 'Details', 'Seats', 'Review', 'Pay']; track label; let i = $index) {
+          <span [class.done]="i <= progress()">{{ label }}</span>
+        }
+      </div>
+
+      @if (step() === 'search') {
+        <div class="section-head">
+          <p class="eyebrow">Flight search</p>
+          <h2>Where are you flying?</h2>
+        </div>
+        <form class="search-card" [formGroup]="searchForm" (ngSubmit)="search()">
+          <label>From
+            <select formControlName="originAirportCode">
+              @for (airport of airportOptions(); track airport.code) {
+                <option [value]="airport.code">{{ airport.code }} - {{ airport.city }}</option>
+              }
+            </select>
+          </label>
+          <label>To
+            <select formControlName="destinationAirportCode">
+              @for (airport of airportOptions(); track airport.code) {
+                <option [value]="airport.code">{{ airport.code }} - {{ airport.city }}</option>
+              }
+            </select>
+          </label>
+          <label>Departure <input formControlName="departureDate" type="date" [min]="today()" [max]="maxTravelDate()"></label>
+          <label>Passengers
+            <input formControlName="passengers" type="number" min="1">
+          </label>
+          <label>Trip
+            <select formControlName="tripType">
+              <option>ONE_WAY</option>
+              <option>ROUND_TRIP</option>
+            </select>
+          </label>
+          <button class="primary search-action" type="submit" [disabled]="loading()">Search flights</button>
+        </form>
+      }
+
+      @if (step() === 'results') {
+        <div class="section-head inline">
+          <div>
+            <p class="eyebrow">Available options</p>
+            <h2>{{ flights().length }} flights found</h2>
+          </div>
+          <button class="ghost" type="button" (click)="goTo('search', '/')">Modify search</button>
+        </div>
+
+        <div class="flight-list">
+          @for (flight of flights(); track flight.flightId) {
+            <article class="flight-card">
+              <div>
+                <span class="tag">{{ flight.flightNumber }}</span>
+                <h3>{{ flight.originAirportCode }} <span></span> {{ flight.destinationAirportCode }}</h3>
+                <p>{{ displayFlightDateTime(flight.departureTime, 'card') }} / {{ duration(flight.durationMinutes) }} / {{ flight.aircraftType }}</p>
+              </div>
+              <div class="metric">
+                <small>Available</small>
+                <strong>{{ flight.availableSeats }}/{{ flight.totalSeats }}</strong>
+                @if (flight.availableSeats < (searchForm.value.passengers || 1)) {
+                  <small class="seat-warning">Only {{ flight.availableSeats }} left</small>
+                }
+              </div>
+              <div class="price">
+                <small>from</small>
+                <strong>{{ flight.basePrice | currency:'INR':'symbol':'1.0-0' }}</strong>
+              </div>
+              <button class="primary" type="button" (click)="chooseFlight(flight)">Select</button>
+            </article>
+          } @empty {
+            <div class="empty">No flights returned by the backend for this route.</div>
+          }
+        </div>
+      }
+
+      @if (step() === 'passengers') {
+        <div class="section-head inline">
+          <div>
+            <p class="eyebrow">Passenger information</p>
+            <h2>Complete traveller details</h2>
+          </div>
+          <button class="ghost" type="button" (click)="goTo('results', '/flights')">Back</button>
+        </div>
+
+        <form [formGroup]="detailsForm" (ngSubmit)="continueToSeats()">
+          <div class="form-grid three">
+            <label>Contact email <input formControlName="contactEmail"></label>
+            <label>Contact phone <input formControlName="contactPhone"></label>
+            <label>Meal
+              <select formControlName="mealPreference">
+                <option>NONE</option>
+                <option>VEG</option>
+                <option>NON_VEG</option>
+              </select>
+            </label>
+            <label>Luggage kg <input formControlName="luggageKg" type="number" min="0"></label>
+          </div>
+
+          <div formArrayName="passengers" class="passenger-stack">
+            @for (group of passengerForms.controls; track $index; let i = $index) {
+              <fieldset [formGroupName]="i">
+                <legend>Passenger {{ i + 1 }}</legend>
+                <div class="form-grid four">
+                  <label>Title <select formControlName="title"><option>Mr</option><option>Ms</option><option>Mrs</option><option>Dr</option></select></label>
+                  <label>First name <input formControlName="firstName"></label>
+                  <label>Last name <input formControlName="lastName"></label>
+                  <label>Gender <select formControlName="gender"><option>MALE</option><option>FEMALE</option><option>OTHER</option></select></label>
+                  <label>Date of birth <input formControlName="dateOfBirth" type="date" [max]="today()"></label>
+                  <label>Passenger type <select formControlName="passengerType"><option>ADULT</option><option>CHILD</option><option>INFANT</option></select></label>
+                  <label>Passport <input formControlName="passportNumber"></label>
+                  <label>Passport expiry <input formControlName="passportExpiry" type="date" [min]="today()"></label>
+                  <label>Nationality <input formControlName="nationality"></label>
+                </div>
+              </fieldset>
+            }
+          </div>
+
+          <button class="primary wide" type="submit" [disabled]="loading()">Continue to seats</button>
+        </form>
+      }
+
+      @if (step() === 'seats') {
+        <div class="section-head inline">
+          <div>
+            <p class="eyebrow">Seat map</p>
+            <h2>Select {{ searchForm.value.passengers }} seat(s)</h2>
+          </div>
+          <div class="legend"><span></span> Available <span></span> Selected <span></span> Unavailable</div>
+        </div>
+
+        <div class="seat-layout">
+          <div class="seat-map">
+            @for (row of rows(); track row) {
+              <div class="seat-row">
+                <small>{{ row }}</small>
+                @for (seat of seatColumns(row); track seat.seatId) {
+                  <button type="button" class="seat" [ngClass]="seatClass(seat)" (click)="toggleSeat(seat)">
+                    {{ seat.seatNumber }}
+                  </button>
+                }
+              </div>
+            }
+          </div>
+
+          <aside class="summary">
+            <h3>Selected seats</h3>
+            @for (seat of selectedSeats(); track seat.seatId) {
+              <div class="summary-line"><span>{{ seat.seatNumber }} / {{ seat.seatClass | titlecase }}</span><strong>x{{ seat.priceMultiplier }}</strong></div>
+            } @empty {
+              <p>No seats selected yet.</p>
+            }
+            <button class="primary wide" type="button" (click)="prepareReview()" [disabled]="loading()">Review fare</button>
+          </aside>
+        </div>
+      }
+
+      @if (step() === 'review') {
+        <div class="section-head inline">
+          <div>
+            <p class="eyebrow">Review booking</p>
+            <h2>Confirm itinerary and fare</h2>
+          </div>
+          <button class="ghost" type="button" (click)="goTo('seats', '/seats')">Edit seats</button>
+        </div>
+        <div class="review-grid">
+          <article class="itinerary">
+            <h3>{{ selectedFlight()?.originAirportCode }} to {{ selectedFlight()?.destinationAirportCode }}</h3>
+            <p>{{ displayFlightDateTime(selectedFlight()?.departureTime, 'fullDate') }} / {{ selectedFlight()?.flightNumber }}</p>
+            <div class="chips">
+              @for (seat of selectedSeats(); track seat.seatId) {
+                <span>{{ seat.seatNumber }}</span>
+              }
+            </div>
+          </article>
+          <aside class="summary">
+            <h3>Fare summary</h3>
+            <div class="summary-line"><span>Base fare</span><strong>{{ fare()?.baseFare | currency:'INR' }}</strong></div>
+            <div class="summary-line"><span>Taxes</span><strong>{{ fare()?.taxes | currency:'INR' }}</strong></div>
+            <div class="summary-line"><span>Meal</span><strong>{{ fare()?.mealCost | currency:'INR' }}</strong></div>
+            <div class="summary-line"><span>Baggage</span><strong>{{ fare()?.baggageCost | currency:'INR' }}</strong></div>
+            <div class="summary-total"><span>Total</span><strong>{{ fare()?.totalFare | currency:'INR' }}</strong></div>
+            <button class="primary wide" type="button" (click)="createBooking()" [disabled]="loading()">Create booking</button>
+          </aside>
+        </div>
+      }
+
+      @if (step() === 'payment') {
+        <div class="confirmation">
+          <p class="eyebrow">Payment</p>
+          <h2>{{ booking()?.status === 'CONFIRMED' ? 'Ticket confirmed' : 'Complete payment' }}</h2>
+          <p>Booking ID {{ booking()?.bookingId }} @if (booking()?.pnrCode) { / PNR {{ booking()?.pnrCode }} }</p>
+          @if (booking()?.status === 'CONFIRMED') {
+            <div class="ticket-success">
+              <span class="success-mark">OK</span>
+              <h3>Your ticket is booked</h3>
+              <p>Payment is verified through Razorpay and your seats are confirmed.</p>
+              <button class="primary wide" type="button" (click)="downloadTicketPdf()">Download ticket PDF</button>
+              <button class="ghost wide" type="button" (click)="downloadBoardingPass()">Download boarding pass</button>
+              <button class="ghost wide" type="button" (click)="loadTrips()">View my trips</button>
+              <button class="ghost wide" type="button" (click)="goTo('search', '/')">Search more flights</button>
+              @if (notifications().length) {
+                <div class="notification-list">
+                  <h4>Latest notifications</h4>
+                  @for (item of notifications(); track item.notificationId) {
+                    <div class="notification-item">
+                      <strong>{{ item.title }}</strong>
+                      <span>{{ item.channel }} / {{ item.status }}</span>
+                      <p>{{ item.message }}</p>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          } @else {
+            <form [formGroup]="paymentForm" (ngSubmit)="pay()">
+              <label>Preferred payment method
+                <select formControlName="method">
+                  <option>UPI</option>
+                  <option>CARD</option>
+                  <option>NET_BANKING</option>
+                  <option>WALLET</option>
+                </select>
+              </label>
+              <button class="primary wide" type="submit" [disabled]="loading()">
+                Pay with Razorpay {{ fare()?.totalFare | currency:'INR' }}
+              </button>
+            </form>
+          }
+        </div>
+      }
+
+    </section>
+    }
+  </main>
+</div>
+
+@if (loading()) {
+  <div class="loader">Processing SkyBooker request...</div>
+}
